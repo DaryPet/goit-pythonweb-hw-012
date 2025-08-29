@@ -1,0 +1,29 @@
+services:
+  postgres:
+    image: postgres:15
+    container_name: postgres_db_contacts
+    environment:
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: contacts_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    restart: always
+
+  # 🚀 НОВЫЙ СЕРВИС ДЛЯ НАШЕГО ПРИЛОЖЕНИЯ
+  web:
+    # Собираем образ из Dockerfile в текущей папке
+    build: .
+    container_name: fastapi_app_contacts
+    # Пробрасываем порт, чтобы API был доступен снаружи
+    ports:
+      - "8000:8000"
+    # 🔗 Указываем, что наш сервис зависит от postgres.
+    # Docker Compose сначала запустит базу данных, а потом приложение.
+    depends_on:
+      - postgres
+
+volumes:
+  postgres_data:
