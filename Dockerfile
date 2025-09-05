@@ -1,28 +1,31 @@
-# 1. Выбираем официальный базовый образ Python.
-# slim-buster - это легковесная версия Debian, что делает наш итоговый образ меньше.
+
 FROM python:3.12-slim
 
-# 2. Устанавливаем рабочую директорию внутри контейнера.
-# Все последующие команды будут выполняться в /app.
 WORKDIR /app
 
-# 3. Устанавливаем Poetry.
-# Мы отключаем создание виртуальных окружений, так как Docker-контейнер сам по себе является изоляцией.
-RUN pip install poetry
-RUN poetry config virtualenvs.create false
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    libffi-dev \
+    libssl-dev \
+    curl \
+ && rm -rf /var/lib/apt/lists/*
 
-# 4. Копируем файлы зависимостей в контейнер.
-# Копируем их отдельно от остального кода для кеширования. Docker не будет переустанавливать зависимости, если эти файлы не менялись.
-COPY pyproject.toml poetry.lock ./
 
-# 5. Устанавливаем зависимости проекта.
-# --no-root, чтобы не устанавливать сам проект как библиотеку.
-# --no-dev, чтобы не ставить зависимости для разработки (например, pytest).
-RUN poetry install --no-root
+ENV POETRY_VERSION=2.1.0 \
+    POETRY_HOME="/opt/poetry" \
+    POETRY_VIRTUALENVS_CREATE=false \
+    POETRY_NO_INTERACTION=1
 
-# 6. Копируем весь исходный код нашего приложения в рабочую директорию.
+RUN curl -sSL https://install.python-poetry.org | python3 - \
+ && ln -s ${POETRY_HOME}/bin/poetry /usr/local/bin/poetry
+
+COPY pyproject.toml poetry.lock ./ 
+RUN poetry install --no-root --no-ansi --verbose
+
 COPY . .
 
-# 7. Указываем команду, которая будет запускаться при старте контейнера.
-# Запускаем Uvicorn сервер. --host 0.0.0.0 делает его доступным извне контейнера.
+ENV PYTHONUNBUFFERED=1
+
+EXPOSE 8000
+
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]

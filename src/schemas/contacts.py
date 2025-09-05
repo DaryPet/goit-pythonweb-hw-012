@@ -2,6 +2,7 @@ from datetime import date
 from typing import Optional
 from pydantic import BaseModel, Field, EmailStr, ConfigDict
 
+
 class ContactBase(BaseModel):
     """
     Base Pydantic model for contact data.
@@ -9,12 +10,14 @@ class ContactBase(BaseModel):
     This class defines the fundamental fields for a contact and is used for data validation
     and serialization.
     """
+
     first_name: str = Field(max_length=50)
     last_name: str = Field(max_length=50)
     email: EmailStr
     phone: str = Field(max_length=50)
     birthday: date
-    additional_data: Optional[str] = Field(default=None, max_length=255 )
+    additional_data: Optional[str] = Field(default=None, max_length=255)
+
 
 class ContactCreate(ContactBase):
     """
@@ -22,7 +25,9 @@ class ContactCreate(ContactBase):
 
     It inherits all fields from ContactBase.
     """
+
     pass
+
 
 class ContactUpdate(BaseModel):
     """
@@ -30,12 +35,14 @@ class ContactUpdate(BaseModel):
 
     All fields are optional to allow for partial updates (PATCH requests).
     """
-    first_name: Optional[str ]= Field(default=None, max_length=50)
-    last_name: Optional[str ] = Field(default=None, max_length=50)
+
+    first_name: Optional[str] = Field(default=None, max_length=50)
+    last_name: Optional[str] = Field(default=None, max_length=50)
     email: Optional[EmailStr]
-    phone: Optional[str ] = Field(default=None, max_length=50)
+    phone: Optional[str] = Field(default=None, max_length=50)
     birthday: Optional[date]
-    additional_data: Optional[str] = Field(default=None, max_length=255 )
+    additional_data: Optional[str] = Field(default=None, max_length=255)
+
 
 class ContactResponse(ContactBase):
     """
@@ -45,5 +52,6 @@ class ContactResponse(ContactBase):
     from ContactBase. The `from_attributes=True` setting is essential for
     mapping the SQLAlchemy model fields to the Pydantic model.
     """
+
     id: int
     model_config = ConfigDict(from_attributes=True)

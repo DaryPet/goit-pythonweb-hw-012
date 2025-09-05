@@ -13,3 +13,9 @@ then
 # run swagger documentation
 `http://localhost:8000/docs`
 
+# run redis
+`docker compose up -d --build`
+`docker compose ps`
+
+# run black 
+`poetry run black .`

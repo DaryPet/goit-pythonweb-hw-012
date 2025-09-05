@@ -1,7 +1,13 @@
 import contextlib
-from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.ext.asyncio import (
+    AsyncEngine,
+    AsyncSession,
+    async_sessionmaker,
+    create_async_engine,
+)
 from sqlalchemy.exc import SQLAlchemyError
 from src.conf.config import settings
+
 
 class DatabaseSessionManager:
     """
@@ -11,8 +17,13 @@ class DatabaseSessionManager:
     for managing database sessions, ensuring transactions are properly committed or
     rolled back.
     """
+
     def __init__(self, url: str):
-        self._engine: AsyncEngine = create_async_engine(url, echo=False)
+        self._engine: AsyncEngine = create_async_engine(
+            url,
+            echo=True,
+            connect_args={"server_settings": {"client_encoding": "utf8"}},
+        )
         self._session_maker: async_sessionmaker[AsyncSession] = async_sessionmaker(
             bind=self._engine,
             autoflush=False,
@@ -32,7 +43,9 @@ class DatabaseSessionManager:
         finally:
             await session.close()
 
+
 sessionmanager = DatabaseSessionManager(settings.DB_URL)
+
 
 async def get_db():
     """

@@ -5,10 +5,12 @@ from sqlalchemy import select, or_, and_, extract
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.database.models import Contact
-from src.schemas import ContactCreate, ContactUpdate
+from src.schemas.contacts import ContactCreate, ContactUpdate
 
 
-async def create_contact(body: ContactCreate, db: AsyncSession) -> Contact:
+async def create_contact(
+    body: ContactCreate, owner_id: int, db: AsyncSession
+) -> Contact:
     """
     Creates a new contact in the database.
 
@@ -16,14 +18,17 @@ async def create_contact(body: ContactCreate, db: AsyncSession) -> Contact:
     :param db: The database session.
     :return: The newly created contact object.
     """
-    
-    contact = Contact(**body.model_dump())
+
+    contact = Contact(**body.model_dump(), owner_id=owner_id)
     db.add(contact)
     await db.flush()
     await db.refresh(contact)
     return contact
 
-async def get_contacts(skip: int, limit: int, db: AsyncSession) -> List[Contact]:
+
+async def get_contacts(
+    skip: int, limit: int, owner_id: int, db: AsyncSession
+) -> List[Contact]:
     """
     Retrieves a list of contacts with pagination.
 
@@ -32,12 +37,21 @@ async def get_contacts(skip: int, limit: int, db: AsyncSession) -> List[Contact]
     :param db: The database session.
     :return: A list of contact objects.
     """
-    
-    stmt = select(Contact).order_by(Contact.id).offset(skip).limit(limit)
-    result  = await db.execute(stmt)
+
+    stmt = (
+        select(Contact)
+        .where(Contact.owner_id == owner_id)
+        .order_by(Contact.id)
+        .offset(skip)
+        .limit(limit)
+    )
+    result = await db.execute(stmt)
     return list(result.scalars().all())
 
-async def get_contact_by_id(contact_id: int, db: AsyncSession) -> Optional[Contact]:
+
+async def get_contact_by_id(
+    contact_id: int, owner_id: int, db: AsyncSession
+) -> Optional[Contact]:
     """
     Retrieves a single contact by its ID.
 
@@ -45,13 +59,15 @@ async def get_contact_by_id(contact_id: int, db: AsyncSession) -> Optional[Conta
     :param db: The database session.
     :return: The contact object, or None if not found.
     """
-    
-    stmt = select(Contact).where(Contact.id == contact_id)
+
+    stmt = select(Contact).where(Contact.id == contact_id, Contact.owner_id == owner_id)
     result = await db.execute(stmt)
     return result.scalar_one_or_none()
 
 
-async def get_contact_by_email(email: str, db: AsyncSession) -> Optional[Contact]:
+async def get_contact_by_email(
+    email: str, owner_id: int, db: AsyncSession
+) -> Optional[Contact]:
     """
     Retrieves a single contact by its email address.
 
@@ -59,15 +75,13 @@ async def get_contact_by_email(email: str, db: AsyncSession) -> Optional[Contact
     :param db: The database session.
     :return: The contact object, or None if not found.
     """
-    stmt = select(Contact).where(Contact.email == email)
+    stmt = select(Contact).where(Contact.email == email, Contact.owner_id == owner_id)
     result = await db.execute(stmt)
     return result.scalar_one_or_none()
 
 
-
-
 async def update_contact(
-    contact_id: int, body: ContactUpdate, db: AsyncSession
+    contact_id: int, owner_id: int, body: ContactUpdate, db: AsyncSession
 ) -> Optional[Contact]:
     """
     Updates an existing contact's information.
@@ -78,8 +92,8 @@ async def update_contact(
     :param db: The database session.
     :return: The updated contact object, or None if not found.
     """
-     
-    contact = await get_contact_by_id(contact_id, db)
+
+    contact = await get_contact_by_id(contact_id, owner_id, db)
     if not contact:
         return None
 
@@ -92,7 +106,9 @@ async def update_contact(
     return contact
 
 
-async def remove_contact(contact_id: int, db: AsyncSession) -> Optional[Contact]:
+async def remove_contact(
+    contact_id: int, owner_id: int, db: AsyncSession
+) -> Optional[Contact]:
     """
     Removes a contact from the database.
 
@@ -100,8 +116,8 @@ async def remove_contact(contact_id: int, db: AsyncSession) -> Optional[Contact]
     :param db: The database session.
     :return: The removed contact object, or None if not found.
     """
-    
-    contact = await get_contact_by_id(contact_id, db)
+
+    contact = await get_contact_by_id(contact_id, owner_id, db)
     if not contact:
         return None
 
@@ -111,6 +127,7 @@ async def remove_contact(contact_id: int, db: AsyncSession) -> Optional[Contact]
 
 async def search_contacts(
     query: str,
+    owner_id: int,
     skip: int,
     limit: int,
     db: AsyncSession,
@@ -128,10 +145,13 @@ async def search_contacts(
     stmt = (
         select(Contact)
         .where(
-            or_(
-                Contact.first_name.ilike(f"%{query}%"),
-                Contact.last_name.ilike(f"%{query}%"),
-                Contact.email.ilike(f"%{query}%"),
+            and_(
+                Contact.owner_id == owner_id,
+                or_(
+                    Contact.first_name.ilike(f"%{query}%"),
+                    Contact.last_name.ilike(f"%{query}%"),
+                    Contact.email.ilike(f"%{query}%"),
+                ),
             )
         )
         .order_by(Contact.id)
@@ -142,7 +162,7 @@ async def search_contacts(
     return list(result.scalars().all())
 
 
-async def get_upcoming_birthdays(db: AsyncSession) -> List[Contact]:
+async def get_upcoming_birthdays(owner_id: int, db: AsyncSession) -> List[Contact]:
     """
     Retrieves contacts with birthdays in the next 7 days.
 
@@ -156,7 +176,7 @@ async def get_upcoming_birthdays(db: AsyncSession) -> List[Contact]:
     start_doy = today.timetuple().tm_yday
     end_doy = end_date.timetuple().tm_yday
 
-    stmt = select(Contact)
+    stmt = select(Contact).where(Contact.owner_id == owner_id)
 
     if start_doy <= end_doy:
         stmt = stmt.where(
@@ -173,6 +193,8 @@ async def get_upcoming_birthdays(db: AsyncSession) -> List[Contact]:
             )
         )
 
-    stmt = stmt.order_by(extract("doy", Contact.birthday), Contact.last_name, Contact.first_name)
+    stmt = stmt.order_by(
+        extract("doy", Contact.birthday), Contact.last_name, Contact.first_name
+    )
     result = await db.execute(stmt)
     return list(result.scalars().all())
