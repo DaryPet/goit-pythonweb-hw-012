@@ -9,10 +9,4 @@ services:
         sync: false
       - key: REDIS_URL
         sync: false
-  - type: static
-    name: goit-fastapi-docs
-    rootDir: ./docs
-    buildCommand: "poetry run make html"
-    publishPath: "build/html"
-    pullRequestPreviewsEnabled: false
-    autoDeploy: false
+      
