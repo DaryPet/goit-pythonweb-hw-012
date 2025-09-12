@@ -1,3 +1,10 @@
+"""
+Main application entry point for the Contacts REST API.
+
+This module sets up the FastAPI application, including middleware, routing,
+and exception handling.
+"""
+
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -18,6 +25,18 @@ logger = get_logger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    """
+    Handles application startup and shutdown events.
+
+    This context manager initializes and properly closes connections to external
+    services like Redis for rate limiting.
+
+    Args:
+        app (FastAPI): The FastAPI application instance.
+
+    Yields:
+        None: Yields control back to the application to run.
+    """
     redis = redis_from_url(settings.REDIS_URL, encoding="utf-8", decode_responses=True)
     await FastAPILimiter.init(redis)
     try:
@@ -40,6 +59,19 @@ app = FastAPI(
 
 @app.exception_handler(SQLAlchemyError)
 async def database_exception_handler(request: Request, exc: SQLAlchemyError):
+    """
+    Handles SQLAlchemy-related exceptions.
+
+    Logs the database error and returns a generic 500 Internal Server Error
+    response to the client to avoid exposing sensitive database details.
+
+    Args:
+        request (Request): The incoming request that caused the exception.
+        exc (SQLAlchemyError): The SQLAlchemy exception instance.
+
+    Returns:
+        JSONResponse: A JSON response with an error message and status code 500.
+    """
     logger.error(f"Database error on {request.method} {request.url}: {exc}")
     return JSONResponse(
         status_code=500, content={"detail": "Database operation failed"}
@@ -62,4 +94,13 @@ app.include_router(users_router, prefix="/api", tags=["users"])
 
 @app.get("/")
 def health_check():
+    """
+    Checks the health of the API.
+
+    This is a simple endpoint to verify that the application is running
+    and responsive.
+
+    Returns:
+        dict: A dictionary with a status key set to "ok".
+    """
     return {"status": "ok"}

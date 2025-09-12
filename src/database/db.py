@@ -19,6 +19,12 @@ class DatabaseSessionManager:
     """
 
     def __init__(self, url: str):
+        """
+        Initializes the DatabaseSessionManager with a database URL.
+
+        Args:
+            url (str): The database connection string.
+        """
         self._engine: AsyncEngine = create_async_engine(
             url,
             echo=True,
@@ -33,6 +39,15 @@ class DatabaseSessionManager:
 
     @contextlib.asynccontextmanager
     async def session(self):
+        """
+        Provides a managed asynchronous database session.
+
+        This context manager handles the session lifecycle, including
+        committing changes on success and rolling back on errors.
+
+        Yields:
+            AsyncSession: The asynchronous database session.
+        """
         session = self._session_maker()
         try:
             yield session

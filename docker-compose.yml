@@ -30,6 +30,8 @@ services:
       - "8000:8000"
     volumes:
       - .:/app
+    environment:
+      - REDIS_URL=redis://redis:6379
     depends_on:
       - postgres
       - redis

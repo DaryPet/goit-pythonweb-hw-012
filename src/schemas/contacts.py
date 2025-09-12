@@ -12,11 +12,17 @@ class ContactBase(BaseModel):
     """
 
     first_name: str = Field(max_length=50)
+    """The first name of the contact."""
     last_name: str = Field(max_length=50)
+    """The last name of the contact."""
     email: EmailStr
+    """The email address of the contact."""
     phone: str = Field(max_length=50)
+    """The phone number of the contact."""
     birthday: date
+    """The birthday of the contact."""
     additional_data: Optional[str] = Field(default=None, max_length=255)
+    """Optional additional information about the contact."""
 
 
 class ContactCreate(ContactBase):
@@ -37,11 +43,17 @@ class ContactUpdate(BaseModel):
     """
 
     first_name: Optional[str] = Field(default=None, max_length=50)
+    """The new first name of the contact."""
     last_name: Optional[str] = Field(default=None, max_length=50)
+    """The new last name of the contact."""
     email: Optional[EmailStr]
+    """The new email address of the contact."""
     phone: Optional[str] = Field(default=None, max_length=50)
+    """The new phone number of the contact."""
     birthday: Optional[date]
+    """The new birthday of the contact."""
     additional_data: Optional[str] = Field(default=None, max_length=255)
+    """New optional additional information about the contact."""
 
 
 class ContactResponse(ContactBase):
@@ -54,4 +66,5 @@ class ContactResponse(ContactBase):
     """
 
     id: int
+    """The unique ID of the contact."""
     model_config = ConfigDict(from_attributes=True)

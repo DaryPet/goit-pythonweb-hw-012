@@ -17,12 +17,17 @@ cloudinary.config(
 
 async def upload_avatar(file, public_id: str) -> str:
     """
-    Uploads an image to Cloudinary and returns the URL.
+    Uploads an image to Cloudinary and returns the secure URL.
 
-    :param file: UploadFile object from FastAPI
-    :param public_id: Unique public identifier for the image
-    :return: Secure URL of the uploaded image
-    :raises HTTPException: If upload fails
+    Args:
+        file (UploadFile): The image file to be uploaded.
+        public_id (str): A unique public identifier for the image in Cloudinary.
+
+    Returns:
+        str: The secure URL of the uploaded image.
+
+    Raises:
+        HTTPException: If the upload to Cloudinary fails.
     """
     try:
         logger.info(f"Uploading avatar with public_id: {public_id}")
@@ -42,4 +47,24 @@ async def upload_avatar(file, public_id: str) -> str:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to upload avatar to cloud service",
+        )
+
+
+async def get_default_avatar() -> str:
+    """
+    Retrieves the URL of the system's default avatar from Cloudinary.
+
+    Returns:
+        str: The URL of the default avatar.
+
+    Raises:
+        HTTPException: If the default avatar is not found or is misconfigured.
+    """
+    try:
+        return cloudinary.CloudinaryImage("avatars/system_default_avatar").build_url()
+    except Exception as e:
+        logger.error(f"Error getting default avatar: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="System default avatar not configured",
         )

@@ -32,5 +32,11 @@ def setup_logging() -> None:
 def get_logger(name: str) -> logging.Logger:
     """
     Returns a logger instance for a specific module.
+
+    Args:
+        name (str): The name of the logger, typically __name__ of the calling module.
+
+    Returns:
+        logging.Logger: The configured logger instance.
     """
     return logging.getLogger(name)

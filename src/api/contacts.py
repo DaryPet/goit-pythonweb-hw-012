@@ -1,4 +1,4 @@
-from typing import List, Optional
+from typing import List
 
 from fastapi import APIRouter, HTTPException, Depends, status, Query
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -25,6 +25,16 @@ async def search_contacts(
 ):
     """
     Searches for contacts by first name, last name, or email.
+
+    Args:
+        query (str, optional): The search query. Defaults to Query(..., min_length=1).
+        skip (int, optional): The number of contacts to skip. Defaults to 0.
+        limit (int, optional): The maximum number of contacts to return. Defaults to 10.
+        db (AsyncSession, optional): The database session. Defaults to Depends(get_db).
+        current_user (User, optional): The authenticated user. Defaults to Depends(get_current_user).
+
+    Returns:
+        List[ContactResponse]: A list of contacts matching the search query.
     """
     logger.info(f"Searching for contacts with query: '{query}'")
     contacts = await repository_contacts.search_contacts(
@@ -40,6 +50,13 @@ async def get_upcoming_birthdays(
 ):
     """
     Retrieves contacts with birthdays in the next 7 days.
+
+    Args:
+        db (AsyncSession, optional): The database session. Defaults to Depends(get_db).
+        current_user (User, optional): The authenticated user. Defaults to Depends(get_current_user).
+
+    Returns:
+        List[ContactResponse]: A list of contacts with upcoming birthdays.
     """
     logger.info("Fetching upcoming birthdays.")
     contacts = await repository_contacts.get_upcoming_birthdays(current_user.id, db)
@@ -54,6 +71,17 @@ async def create_contact(
 ):
     """
     Creates a new contact.
+
+    Args:
+        body (ContactCreate): The data for the new contact.
+        db (AsyncSession, optional): The database session. Defaults to Depends(get_db).
+        current_user (User, optional): The authenticated user. Defaults to Depends(get_current_user).
+
+    Raises:
+        HTTPException: If a contact with the same email already exists.
+
+    Returns:
+        ContactResponse: The newly created contact.
     """
     logger.info(f"Creating a new contact for email: {body.email}")
     existing_contact = await repository_contacts.get_contact_by_email(
@@ -78,6 +106,15 @@ async def get_contacts(
 ):
     """
     Retrieves a list of contacts with pagination.
+
+    Args:
+        skip (int, optional): The number of contacts to skip. Defaults to 0.
+        limit (int, optional): The maximum number of contacts to return. Defaults to 10.
+        db (AsyncSession, optional): The database session. Defaults to Depends(get_db).
+        current_user (User, optional): The authenticated user. Defaults to Depends(get_current_user).
+
+    Returns:
+        List[ContactResponse]: A list of contacts.
     """
     logger.info(f"Fetching contacts with skip={skip}, limit={limit}")
     contacts = await repository_contacts.get_contacts(skip, limit, current_user.id, db)
@@ -92,6 +129,17 @@ async def get_contact(
 ):
     """
     Retrieves a single contact by its ID.
+
+    Args:
+        contact_id (int): The ID of the contact to retrieve.
+        db (AsyncSession, optional): The database session. Defaults to Depends(get_db).
+        current_user (User, optional): The authenticated user. Defaults to Depends(get_current_user).
+
+    Raises:
+        HTTPException: If the contact is not found.
+
+    Returns:
+        ContactResponse: The contact with the specified ID.
     """
     logger.info(f"Fetching contact with ID: {contact_id}")
     contact = await repository_contacts.get_contact_by_id(
@@ -114,6 +162,18 @@ async def update_contact(
 ):
     """
     Performs a full update of a contact.
+
+    Args:
+        contact_id (int): The ID of the contact to update.
+        body (ContactCreate): The new data for the contact.
+        db (AsyncSession, optional): The database session. Defaults to Depends(get_db).
+        current_user (User, optional): The authenticated user. Defaults to Depends(get_current_user).
+
+    Raises:
+        HTTPException: If the contact is not found.
+
+    Returns:
+        ContactResponse: The updated contact.
     """
     logger.info(f"Updating contact with ID: {contact_id}")
     contact = await repository_contacts.update_contact(
@@ -136,6 +196,18 @@ async def partial_update_contact(
 ):
     """
     Performs a partial update of a contact.
+
+    Args:
+        contact_id (int): The ID of the contact to partially update.
+        body (ContactUpdate): The new data for the contact.
+        db (AsyncSession, optional): The database session. Defaults to Depends(get_db).
+        current_user (User, optional): The authenticated user. Defaults to Depends(get_current_user).
+
+    Raises:
+        HTTPException: If the contact is not found.
+
+    Returns:
+        ContactResponse: The partially updated contact.
     """
     logger.info(f"Partially updating contact with ID: {contact_id}")
     contact = await repository_contacts.update_contact(
@@ -157,6 +229,17 @@ async def delete_contact(
 ):
     """
     Deletes a contact.
+
+    Args:
+        contact_id (int): The ID of the contact to delete.
+        db (AsyncSession, optional): The database session. Defaults to Depends(get_db).
+        current_user (User, optional): The authenticated user. Defaults to Depends(get_current_user).
+
+    Raises:
+        HTTPException: If the contact is not found.
+
+    Returns:
+        None: Returns nothing upon successful deletion, with a 204 No Content status.
     """
     logger.info(f"Deleting contact with ID: {contact_id}")
     contact = await repository_contacts.remove_contact(contact_id, current_user.id, db)

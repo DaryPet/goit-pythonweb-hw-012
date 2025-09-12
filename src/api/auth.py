@@ -6,14 +6,30 @@ from fastapi.security import (
 )
 from sqlalchemy.ext.asyncio import AsyncSession
 from fastapi import Request
+from redis.asyncio import Redis
+from src.services.redis_service import get_redis_client
 
 from src.database.db import get_db
 from src.repository import users as repository_users
-from src.schemas.users import UserCreate, UserResponse, TokenModel
+from src.schemas.users import (
+    UserCreate,
+    UserResponse,
+    TokenModel,
+    PasswordResetRequest,
+    PasswordResetConfirm,
+)
 from src.security.passwords import get_password_hash, verify_password
-from src.security.tokens import create_access_token, create_refresh_token
-from src.services.auth import verify_refresh_token, get_email_from_token
-from src.services.email import send_verification_email
+from src.security.tokens import (
+    create_access_token,
+    create_refresh_token,
+    create_password_reset_token,
+)
+from src.services.auth import (
+    verify_refresh_token,
+    get_email_from_token,
+    verify_password_reset_token,
+)
+from src.services.email import send_verification_email, send_password_reset_email
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 security = HTTPBearer()
@@ -26,7 +42,18 @@ async def signup(
     body: UserCreate, request: Request, db: AsyncSession = Depends(get_db)
 ):
     """
-    User sighnup.
+    Creates a new user.
+
+    Args:
+        body (UserCreate): The user data to be created.
+        request (Request): The incoming request object.
+        db (AsyncSession, optional): The database session. Defaults to Depends(get_db).
+
+    Raises:
+        HTTPException: If a user with the same email already exists.
+
+    Returns:
+        UserResponse: The newly created user object.
     """
     existing_user = await repository_users.get_user_by_email(body.email, db)
     if existing_user:
@@ -48,8 +75,17 @@ async def login(
     form_data: OAuth2PasswordRequestForm = Depends(), db: AsyncSession = Depends(get_db)
 ):
     """
-    User authentification
-    Verify email (in username field) and password.
+    Authenticates a user and provides access and refresh tokens.
+
+    Args:
+        form_data (OAuth2PasswordRequestForm, optional): The login credentials. Defaults to Depends().
+        db (AsyncSession, optional): The database session. Defaults to Depends(get_db).
+
+    Raises:
+        HTTPException: If credentials are incorrect or the user's email is not verified.
+
+    Returns:
+        TokenModel: A model containing the access and refresh tokens.
     """
     user = await repository_users.get_user_by_email(form_data.username, db)
     if not user or not verify_password(form_data.password, user.password_hash):
@@ -80,13 +116,24 @@ async def login(
 async def refresh_token(
     credentials: HTTPAuthorizationCredentials = Depends(security),
     db: AsyncSession = Depends(get_db),
+    redis: Redis = Depends(get_redis_client),
 ):
     """
-    Refresh access_token using a refresh_token.
-    Pass the refresh token in the Authorization header: Bearer <token>
+    Refreshes the access token using a valid refresh token.
+
+    Args:
+        credentials (HTTPAuthorizationCredentials, optional): The refresh token. Defaults to Depends(security).
+        db (AsyncSession, optional): The database session. Defaults to Depends(get_db).
+        redis (Redis, optional): The Redis client. Defaults to Depends(get_redis_client).
+
+    Raises:
+        HTTPException: If the refresh token is invalid.
+
+    Returns:
+        TokenModel: A model with new access and refresh tokens.
     """
     token = credentials.credentials
-    user = await verify_refresh_token(token, db)
+    user = await verify_refresh_token(token, db, redis)
     if not user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid refresh token"
@@ -106,15 +153,17 @@ async def refresh_token(
 @router.get("/confirmed_email/{token}")
 async def confirmed_email(token: str, db: AsyncSession = Depends(get_db)):
     """
-    Confirm user's email address using verification token.
+    Confirms a user's email address using a verification token.
 
-    Extracts email from the verification token, finds the user in database,
-    and marks their email as verified. If user is already verified or token
-    is invalid, returns appropriate error message.
+    Args:
+        token (str): The email verification token.
+        db (AsyncSession, optional): The database session. Defaults to Depends(get_db).
 
-    :param token: Email verification token received by user
-    :param db: Database session dependency
-    :return: Success or error message
+    Raises:
+        HTTPException: If the token is invalid or user is not found.
+
+    Returns:
+        dict: A success or status message.
     """
     email = await get_email_from_token(token)
     user = await repository_users.get_user_by_email(email, db)
@@ -127,3 +176,58 @@ async def confirmed_email(token: str, db: AsyncSession = Depends(get_db)):
 
     await repository_users.verify_user(user, db)
     return {"message": "Email successfully confirmed"}
+
+
+@router.post("/password-reset-request", status_code=status.HTTP_200_OK)
+async def password_reset_request(
+    body: PasswordResetRequest, request: Request, db: AsyncSession = Depends(get_db)
+):
+    """
+    Sends a password reset email to a user if their email exists in the database.
+
+    Args:
+        body (PasswordResetRequest): The request body containing the user's email.
+        request (Request): The incoming request object.
+        db (AsyncSession, optional): The database session. Defaults to Depends(get_db).
+
+    Returns:
+        dict: A message indicating that password reset instructions have been sent.
+    """
+    user = await repository_users.get_user_by_email(body.email, db)
+    if user:
+        reset_token = create_password_reset_token(user.email)
+        await send_password_reset_email(
+            user.email, user.email, str(request.base_url), reset_token
+        )
+
+    return {"message": "If email exists, password reset instructions will be sent"}
+
+
+@router.post("/password-reset-confirm", status_code=status.HTTP_200_OK)
+async def password_reset_confirm(
+    body: PasswordResetConfirm, db: AsyncSession = Depends(get_db)
+):
+    """
+    Resets the user's password with a new one using a valid reset token.
+
+    Args:
+        body (PasswordResetConfirm): The request body containing the reset token and new password.
+        db (AsyncSession, optional): The database session. Defaults to Depends(get_db).
+
+    Raises:
+        HTTPException: If the reset token is invalid.
+
+    Returns:
+        dict: A message confirming that the password has been reset.
+    """
+    email = await verify_password_reset_token(body.token)
+    user = await repository_users.get_user_by_email(email, db)
+
+    if not user:
+        raise HTTPException(status_code=400, detail="Invalid reset token")
+
+    hashed_password = get_password_hash(body.new_password)
+    user.password_hash = hashed_password
+    await db.commit()
+
+    return {"message": "Password successfully reset"}

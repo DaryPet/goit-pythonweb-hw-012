@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+
+<html lang="en" data-content_root="../../../">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>src.api.users &#8212; Contact-App  documentation</title>
+    <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css?v=5ecbeea2" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/basic.css?v=b08954a9" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/alabaster.css?v=27fed22d" />
+    <script src="../../../_static/documentation_options.js?v=5929fcd5"></script>
+    <script src="../../../_static/doctools.js?v=9bcbadda"></script>
+    <script src="../../../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <link rel="index" title="Index" href="../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../search.html" />
+   
+  <link rel="stylesheet" href="../../../_static/custom.css" type="text/css" />
+  
+
+  
+  
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <h1>Source code for src.api.users</h1><div class="highlight"><pre>
+<span></span><span class="kn">from</span><span class="w"> </span><span class="nn">fastapi</span><span class="w"> </span><span class="kn">import</span> <span class="n">APIRouter</span><span class="p">,</span> <span class="n">Depends</span><span class="p">,</span> <span class="n">UploadFile</span><span class="p">,</span> <span class="n">File</span><span class="p">,</span> <span class="n">HTTPException</span><span class="p">,</span> <span class="n">status</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">sqlalchemy.ext.asyncio</span><span class="w"> </span><span class="kn">import</span> <span class="n">AsyncSession</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">fastapi_limiter.depends</span><span class="w"> </span><span class="kn">import</span> <span class="n">RateLimiter</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">src.database.db</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_db</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">src.schemas.users</span><span class="w"> </span><span class="kn">import</span> <span class="n">UserResponse</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">src.services.auth</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_current_user</span><span class="p">,</span> <span class="n">get_current_admin</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">src.database.models</span><span class="w"> </span><span class="kn">import</span> <span class="n">User</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">src.repository</span><span class="w"> </span><span class="kn">import</span> <span class="n">users</span> <span class="k">as</span> <span class="n">repository_users</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">src.services.cloudinary_service</span><span class="w"> </span><span class="kn">import</span> <span class="n">upload_avatar</span><span class="p">,</span> <span class="n">get_default_avatar</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">src.core.logger</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_logger</span>
+
+<span class="n">logger</span> <span class="o">=</span> <span class="n">get_logger</span><span class="p">(</span><span class="vm">__name__</span><span class="p">)</span>
+
+<span class="n">router</span> <span class="o">=</span> <span class="n">APIRouter</span><span class="p">(</span><span class="n">prefix</span><span class="o">=</span><span class="s2">&quot;/users&quot;</span><span class="p">,</span> <span class="n">tags</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;users&quot;</span><span class="p">])</span>
+
+
+<div class="viewcode-block" id="read_users_me">
+<a class="viewcode-back" href="../../../src.api.html#src.api.users.read_users_me">[docs]</a>
+<span class="nd">@router</span><span class="o">.</span><span class="n">get</span><span class="p">(</span>
+    <span class="s2">&quot;/me&quot;</span><span class="p">,</span>
+    <span class="n">response_model</span><span class="o">=</span><span class="n">UserResponse</span><span class="p">,</span>
+    <span class="n">dependencies</span><span class="o">=</span><span class="p">[</span><span class="n">Depends</span><span class="p">(</span><span class="n">RateLimiter</span><span class="p">(</span><span class="n">times</span><span class="o">=</span><span class="mi">10</span><span class="p">,</span> <span class="n">seconds</span><span class="o">=</span><span class="mi">60</span><span class="p">))],</span>
+    <span class="n">description</span><span class="o">=</span><span class="s2">&quot;No more then 10 calls per minute&quot;</span><span class="p">,</span>
+<span class="p">)</span>
+<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">read_users_me</span><span class="p">(</span>
+    <span class="n">current_user</span><span class="p">:</span> <span class="n">User</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_current_user</span><span class="p">),</span>
+<span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Retrieves information about the currently authenticated user.</span>
+
+<span class="sd">    If the user does not have a custom avatar, a default one is provided.</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        current_user (User, optional): The authenticated user. Defaults to Depends(get_current_user).</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">        UserResponse: The user&#39;s information, including a verified status and avatar URL.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">current_user</span><span class="o">.</span><span class="n">avatar_url</span><span class="p">:</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">user_data</span> <span class="o">=</span> <span class="n">current_user</span><span class="o">.</span><span class="vm">__dict__</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+            <span class="n">user_data</span><span class="p">[</span><span class="s1">&#39;avatar_url&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="k">await</span> <span class="n">get_default_avatar</span><span class="p">()</span>
+            <span class="k">return</span> <span class="n">UserResponse</span><span class="p">(</span><span class="o">**</span><span class="n">user_data</span><span class="p">)</span>
+        <span class="k">except</span> <span class="ne">Exception</span><span class="p">:</span>
+            <span class="k">pass</span>
+    <span class="k">return</span> <span class="n">current_user</span></div>
+
+
+
+<div class="viewcode-block" id="update_avatar">
+<a class="viewcode-back" href="../../../src.api.html#src.api.users.update_avatar">[docs]</a>
+<span class="nd">@router</span><span class="o">.</span><span class="n">patch</span><span class="p">(</span><span class="s2">&quot;/avatar&quot;</span><span class="p">,</span> <span class="n">response_model</span><span class="o">=</span><span class="n">UserResponse</span><span class="p">)</span>
+<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">update_avatar</span><span class="p">(</span>
+    <span class="n">file</span><span class="p">:</span> <span class="n">UploadFile</span> <span class="o">=</span> <span class="n">File</span><span class="p">(</span><span class="o">...</span><span class="p">),</span>
+    <span class="n">current_user</span><span class="p">:</span> <span class="n">User</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_current_user</span><span class="p">),</span>
+    <span class="n">db</span><span class="p">:</span> <span class="n">AsyncSession</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_db</span><span class="p">),</span>
+<span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Updates the authenticated user&#39;s avatar.</span>
+
+<span class="sd">    The new avatar image is uploaded to Cloudinary, and its URL is saved</span>
+<span class="sd">    in the database for the current user.</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        file (UploadFile, optional): The image file to upload. Defaults to File(...).</span>
+<span class="sd">        current_user (User, optional): The authenticated user. Defaults to Depends(get_current_user).</span>
+<span class="sd">        db (AsyncSession, optional): The database session. Defaults to Depends(get_db).</span>
+
+<span class="sd">    Raises:</span>
+<span class="sd">        HTTPException: If the avatar upload fails.</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">        UserResponse: The updated user object with the new avatar URL.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="n">avatar_url</span> <span class="o">=</span> <span class="k">await</span> <span class="n">upload_avatar</span><span class="p">(</span><span class="n">file</span><span class="p">,</span> <span class="n">public_id</span><span class="o">=</span><span class="sa">f</span><span class="s2">&quot;user_</span><span class="si">{</span><span class="n">current_user</span><span class="o">.</span><span class="n">id</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+        <span class="n">updated_user</span> <span class="o">=</span> <span class="k">await</span> <span class="n">repository_users</span><span class="o">.</span><span class="n">update_avatar</span><span class="p">(</span>
+            <span class="n">current_user</span><span class="p">,</span> <span class="n">avatar_url</span><span class="p">,</span> <span class="n">db</span>
+        <span class="p">)</span>
+        <span class="k">return</span> <span class="n">updated_user</span>
+    <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+        <span class="n">logger</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Error uploading avatar: </span><span class="si">{</span><span class="n">e</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+        <span class="k">raise</span> <span class="n">HTTPException</span><span class="p">(</span>
+            <span class="n">status_code</span><span class="o">=</span><span class="n">status</span><span class="o">.</span><span class="n">HTTP_500_INTERNAL_SERVER_ERROR</span><span class="p">,</span>
+            <span class="n">detail</span><span class="o">=</span><span class="s2">&quot;Failed to upload avatar. Please try again.&quot;</span><span class="p">,</span>
+        <span class="p">)</span></div>
+
+    
+<div class="viewcode-block" id="update_default_avatar">
+<a class="viewcode-back" href="../../../src.api.html#src.api.users.update_default_avatar">[docs]</a>
+<span class="nd">@router</span><span class="o">.</span><span class="n">patch</span><span class="p">(</span><span class="s2">&quot;/admin/default-avatar&quot;</span><span class="p">,</span> <span class="n">response_model</span><span class="o">=</span><span class="nb">dict</span><span class="p">)</span>
+<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">update_default_avatar</span><span class="p">(</span>
+    <span class="n">file</span><span class="p">:</span> <span class="n">UploadFile</span> <span class="o">=</span> <span class="n">File</span><span class="p">(</span><span class="o">...</span><span class="p">),</span>
+    <span class="n">current_user</span><span class="p">:</span> <span class="n">User</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_current_admin</span><span class="p">),</span>
+<span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Updates the system-wide default avatar.</span>
+
+<span class="sd">    This endpoint is restricted to administrators and allows them to change the</span>
+<span class="sd">    default avatar shown to all users who have not set a custom one.</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        file (UploadFile, optional): The image file to use as the new default avatar. Defaults to File(...).</span>
+<span class="sd">        current_user (User, optional): The authenticated administrator. Defaults to Depends(get_current_admin).</span>
+
+<span class="sd">    Raises:</span>
+<span class="sd">        HTTPException: If the avatar upload fails.</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">        dict: A success message and the URL of the new default avatar.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="n">avatar_url</span> <span class="o">=</span> <span class="k">await</span> <span class="n">upload_avatar</span><span class="p">(</span><span class="n">file</span><span class="p">,</span> <span class="n">public_id</span><span class="o">=</span><span class="s2">&quot;system_default_avatar&quot;</span><span class="p">)</span>
+        <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Admin </span><span class="si">{</span><span class="n">current_user</span><span class="o">.</span><span class="n">id</span><span class="si">}</span><span class="s2"> updated system default avatar to: </span><span class="si">{</span><span class="n">avatar_url</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+        
+        <span class="k">return</span> <span class="p">{</span>
+            <span class="s2">&quot;message&quot;</span><span class="p">:</span> <span class="s2">&quot;System default avatar updated successfully&quot;</span><span class="p">,</span>
+            <span class="s2">&quot;avatar_url&quot;</span><span class="p">:</span> <span class="n">avatar_url</span>
+        <span class="p">}</span>
+    <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+        <span class="n">logger</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Error updating default avatar: </span><span class="si">{</span><span class="n">e</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+        <span class="k">raise</span> <span class="n">HTTPException</span><span class="p">(</span>
+            <span class="n">status_code</span><span class="o">=</span><span class="n">status</span><span class="o">.</span><span class="n">HTTP_500_INTERNAL_SERVER_ERROR</span><span class="p">,</span>
+            <span class="n">detail</span><span class="o">=</span><span class="s2">&quot;Failed to update system default avatar&quot;</span><span class="p">,</span>
+        <span class="p">)</span></div>
+
+</pre></div>
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="Main">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="../../../index.html">Contact-App</a></h1>
+
+
+
+
+
+
+
+
+
+<search id="searchbox" style="display: none" role="search">
+    <div class="searchformwrapper">
+    <form class="search" action="../../../search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" placeholder="Search"/>
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</search>
+<script>document.getElementById('searchbox').style.display = "block"</script><h3>Navigation</h3>
+<p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../modules.html">src</a></li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="../../../index.html">Documentation overview</a><ul>
+  <li><a href="../../index.html">Module code</a><ul>
+  </ul></li>
+  </ul></li>
+</ul>
+</div>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &#169;2025, Darya.
+      
+      |
+      Powered by <a href="https://www.sphinx-doc.org/">Sphinx 8.2.3</a>
+      &amp; <a href="https://alabaster.readthedocs.io">Alabaster 1.0.0</a>
+      
+    </div>
+
+    
+
+    
+  </body>
+</html>
