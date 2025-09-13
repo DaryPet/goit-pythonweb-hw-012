@@ -44,6 +44,11 @@ then
 # run documantation
 `cd docs`
 macOS: `open build/html/index.html`
+Linux: `xdg-open build/html/index.html`
+Windows: `start build\html\index.html`
+
+# to check how much you cover your code by test run
+`poetry run pytest --cov=./src`
 
 # deployment
 Cloud Deployment
@@ -54,12 +59,3 @@ Web Service: Render is used for deploying the main FastAPI application.
 Database: Render Postgres is used for the primary database.
 
 Caching: Upstash provides the Redis service for caching.
-
-
-
-Linux: `xdg-open build/html/index.html`
-
-Windows: `start build\html\index.html`
-
-# to check how much you cover your code by test run
-`poetry run pytest --cov=./src`
