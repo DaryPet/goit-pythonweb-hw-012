@@ -45,7 +45,7 @@ then
 `cd docs`
 macOS: `open build/html/index.html`
 
-
+# deployment
 Cloud Deployment
 This project is configured for cloud deployment, utilizing free-tier services.
 
