@@ -1,3 +1,6 @@
+This is a REST API application for managing personal contacts. It is built with FastAPI and uses SQLAlchemy for database interactions. The project is containerized with Docker Compose, and it includes key features such as user authentication (JWT with access/refresh tokens), password reset, user roles, and Redis caching.
+
+
 # build dokcer
 `docker compose up -d --build`
 or
@@ -41,6 +44,18 @@ then
 # run documantation
 `cd docs`
 macOS: `open build/html/index.html`
+
+
+Cloud Deployment
+This project is configured for cloud deployment, utilizing free-tier services.
+
+Web Service: Render is used for deploying the main FastAPI application.
+
+Database: Render Postgres is used for the primary database.
+
+Caching: Upstash provides the Redis service for caching.
+
+
 
 Linux: `xdg-open build/html/index.html`
 
